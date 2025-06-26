@@ -1,7 +1,6 @@
 from flask import Blueprint, request, jsonify
 import uuid
 import datetime
-import os
 import requests
 import hashlib
 import hmac
@@ -10,65 +9,37 @@ from typing import Dict, Any
 
 pix_bp = Blueprint('pix', __name__)
 
-# Configurações PIX (devem ser variáveis de ambiente em produção)
-PIX_API_URL = os.getenv('PIX_API_URL', 'https://api.selfpay.com.br/v1')
-PIX_API_KEY = os.getenv('PIX_API_KEY', 'sua_api_key_aqui')
-WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', 'seu_webhook_secret_aqui')
+# Configurações fixas no código (seguro apenas se o repositório for privado)
+PIX_API_URL = 'https://api.selfpaybr.com/functions/v1/transactions'
+PIX_API_KEY = 'sk_live_wNIuLiybC8GzXsDdjYCDnyy9qmLO0hXOUh3Lxc8xiVZqnkPM'
+WEBHOOK_SECRET = '6869a1a3-d56a-4714-967d-97bf32c4ebee'
 
 class PixPaymentService:
-    """Serviço para integração com API PIX"""
-
-    def __init__(self):
-        self.api_url = PIX_API_URL
-        self.api_key = PIX_API_KEY
-
     def create_pix_payment(self, payment_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Cria um pagamento PIX"""
         try:
             self._validate_payment_data(payment_data)
             api_payload = self._prepare_api_payload(payment_data)
 
             headers = {
-                'Authorization': f'Bearer {self.api_key}',
-                'Content-Type': 'application/json'
+                'Authorization': PIX_API_KEY,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
             }
 
             response = requests.post(
-                f'{self.api_url}/payments',
+                PIX_API_URL,
                 json=api_payload,
                 headers=headers,
                 timeout=30
             )
 
-            if response.status_code == 201:
+            if response.status_code in [200, 201]:
                 return self._format_response(response.json())
             else:
-                raise Exception(f'Erro na API PIX: {response.status_code} - {response.text}')
+                raise Exception(f'Erro na API SelfPay: {response.status_code} - {response.text}')
 
         except Exception as e:
             raise Exception(f'Erro ao criar pagamento PIX: {str(e)}')
-
-    def check_payment_status(self, transaction_id: str) -> Dict[str, Any]:
-        """Verifica o status de um pagamento PIX"""
-        try:
-            headers = {
-                'Authorization': f'Bearer {self.api_key}',
-                'Content-Type': 'application/json'
-            }
-
-            response = requests.get(
-                f'{self.api_url}/payments/{transaction_id}',
-                headers=headers,
-                timeout=30
-            )
-
-            if response.status_code == 200:
-                return response.json()
-            else:
-                raise Exception(f'Erro ao verificar status: {response.status_code}')
-
-        except Exception as e:
-            raise Exception(f'Erro ao verificar status do pagamento: {str(e)}')
 
     def _validate_payment_data(self, data: Dict[str, Any]) -> None:
         required_fields = ['customer', 'items', 'amount']
@@ -77,61 +48,55 @@ class PixPaymentService:
                 raise ValueError(f'Campo obrigatório ausente: {field}')
 
         customer = data['customer']
-        customer_required = ['name', 'email', 'phone', 'document']
-        for field in customer_required:
-            if field not in customer:
-                raise ValueError(f'Campo customer.{field} é obrigatório')
+        for f in ['name', 'email', 'phone', 'document']:
+            if f not in customer:
+                raise ValueError(f'Campo customer.{f} é obrigatório')
 
-        if 'number' not in customer['document'] or 'type' not in customer['document']:
-            raise ValueError('Documento deve conter number e type')
+        document = customer['document']
+        if 'number' not in document or 'type' not in document:
+            raise ValueError('Documento inválido')
 
-        if not isinstance(data['items'], list) or len(data['items']) == 0:
-            raise ValueError('Items deve ser uma lista não vazia')
+        if not isinstance(data['items'], list) or not data['items']:
+            raise ValueError('Items inválidos')
 
         if not isinstance(data['amount'], (int, float)) or data['amount'] <= 0:
-            raise ValueError('Amount deve ser um número positivo')
+            raise ValueError('Valor inválido')
 
     def _prepare_api_payload(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        transaction_id = str(uuid.uuid4())
-        expiration_date = datetime.datetime.now() + datetime.timedelta(minutes=30)
-
         return {
-            'external_id': transaction_id,
-            'amount': int(data['amount']),
-            'description': f'Pagamento Beto Carrero - {transaction_id[:8]}',
-            'customer': {
-                'name': data['customer']['name'],
-                'email': data['customer']['email'],
-                'phone': data['customer']['phone'],
-                'document': {
-                    'type': data['customer']['document']['type'],
-                    'number': data['customer']['document']['number']
+            "paymentMethod": "pix",
+            "items": data["items"],
+            "amount": int(data["amount"]),
+            "customer": {
+                "name": data["customer"]["name"],
+                "email": data["customer"]["email"],
+                "phone": data["customer"]["phone"],
+                "document": {
+                    "number": data["customer"]["document"]["number"],
+                    "type": data["customer"]["document"]["type"].lower()
                 }
-            },
-            'items': data['items'],
-            'expires_at': expiration_date.isoformat(),
-            'notification_url': f'{request.host_url}webhook/pix'
+            }
         }
 
     def _format_response(self, api_response: Dict[str, Any]) -> Dict[str, Any]:
         return {
-            'id': api_response.get('id'),
-            'external_id': api_response.get('external_id'),
-            'status': api_response.get('status', 'waiting_payment'),
-            'amount': api_response.get('amount'),
-            'customer': api_response.get('customer'),
-            'items': api_response.get('items'),
-            'pix': {
-                'qrcode': api_response.get('pix', {}).get('qrcode'),
-                'qrcode_image': api_response.get('pix', {}).get('qrCodeUrl'),
-                'expirationDate': api_response.get('pix', {}).get('expirationDate')
+            "id": api_response.get("id"),
+            "amount": api_response.get("amount"),
+            "status": api_response.get("status"),
+            "customer": api_response.get("customer"),
+            "items": api_response.get("items"),
+            "pix": {
+                "qrcode": api_response["pix"]["qrcode"],
+                "qrcode_image": None,
+                "expirationDate": api_response["pix"]["expirationDate"]
             },
-            'createdAt': api_response.get('createdAt', datetime.datetime.now().isoformat())
+            "createdAt": api_response.get("createdAt")
         }
 
 pix_service = PixPaymentService()
 
-@pix_bp.route('/gerar-pix', methods=['POST'])
+# ✅ Aqui aceita POST e OPTIONS (CORS total)
+@pix_bp.route('/gerar-pix', methods=['POST', 'OPTIONS'])
 def gerar_pix():
     try:
         if not request.is_json:
@@ -146,13 +111,13 @@ def gerar_pix():
     except Exception as e:
         return jsonify({'error': f'Erro interno: {str(e)}'}), 500
 
-@pix_bp.route('/status/<transaction_id>', methods=['GET'])
-def verificar_status(transaction_id):
-    try:
-        result = pix_service.check_payment_status(transaction_id)
-        return jsonify(result), 200
-    except Exception as e:
-        return jsonify({'error': f'Erro ao verificar status: {str(e)}'}), 500
+@pix_bp.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.datetime.now().isoformat(),
+        'service': 'pix-backend'
+    }), 200
 
 @pix_bp.route('/webhook/pix', methods=['POST'])
 def webhook_pix():
@@ -177,11 +142,3 @@ def webhook_pix():
 
     except Exception as e:
         return jsonify({'error': f'Erro no webhook: {str(e)}'}), 500
-
-@pix_bp.route('/health', methods=['GET'])
-def health_check():
-    return jsonify({
-        'status': 'healthy',
-        'timestamp': datetime.datetime.now().isoformat(),
-        'service': 'pix-backend'
-    }), 200
