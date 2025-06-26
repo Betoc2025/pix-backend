@@ -1,3 +1,4 @@
+
 import os
 from flask import Flask, send_from_directory, request
 from flask_cors import CORS
@@ -8,13 +9,12 @@ from routes.pix import pix_bp
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 
-# Configurar CORS
+# Configurar CORS com headers autorizados
 CORS(app,
-     origins=['*'],  # Em produção, especifique os domínios permitidos
-     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-     allow_headers=['Content-Type', 'Authorization', 'X-Signature'],
-     expose_headers=['Content-Type'],
-     supports_credentials=True)
+     resources={r"/*": {"origins": "*"}},
+     supports_credentials=True,
+     expose_headers=["Content-Type", "Authorization"],
+     allow_headers=["Content-Type", "Authorization", "X-Signature"])
 
 # Registrar blueprints
 app.register_blueprint(user_bp, url_prefix='/api')
