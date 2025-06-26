@@ -1,20 +1,16 @@
 import os
-import sys
-# DON'T CHANGE THIS !!!
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
 from flask import Flask, send_from_directory, request
 from flask_cors import CORS
-from src.models.user import db
-from src.routes.user import user_bp
-from src.routes.pix import pix_bp
+from models.user import db
+from routes.user import user_bp
+from routes.pix import pix_bp
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 
 # Configurar CORS
-CORS(app, 
-     origins=['*'],  # Em produção, especificar domínios específicos
+CORS(app,
+     origins=['*'],  # Em produção, especifique os domínios permitidos
      methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
      allow_headers=['Content-Type', 'Authorization', 'X-Signature'],
      expose_headers=['Content-Type'],
@@ -24,19 +20,21 @@ CORS(app,
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(pix_bp, url_prefix='/api/pix')
 
-# uncomment if you need to use database
+# Configuração do banco de dados SQLite
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
+
 with app.app_context():
     db.create_all()
 
+# Rota principal para servir arquivos estáticos
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
     static_folder_path = app.static_folder
     if static_folder_path is None:
-            return "Static folder not configured", 404
+        return "Static folder not configured", 404
 
     if path != "" and os.path.exists(os.path.join(static_folder_path, path)):
         return send_from_directory(static_folder_path, path)
@@ -47,7 +45,7 @@ def serve(path):
         else:
             return "index.html not found", 404
 
-# Middleware para logging de requisições
+# Middleware de logging de requisições (para debug)
 @app.before_request
 def log_request_info():
     if app.debug:
