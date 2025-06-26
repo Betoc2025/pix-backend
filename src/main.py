@@ -1,6 +1,5 @@
-
-
 import os
+from datetime import timedelta
 from flask import Flask, send_from_directory, request
 from flask_cors import CORS
 from models.user import db
@@ -10,12 +9,23 @@ from routes.pix import pix_bp
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 
-# Configurar CORS para permitir Authorization corretamente
+# ✅ Configurar CORS corretamente
 CORS(app,
-     origins="*",
-     allow_headers="*",
-     expose_headers="*",
-     supports_credentials=True)
+     resources={r"/*": {
+         "origins": "*",
+         "allow_headers": [
+             "Content-Type",
+             "Authorization",
+             "X-Signature"
+         ],
+         "expose_headers": [
+             "Authorization",
+             "Content-Type"
+         ],
+         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+         "supports_credentials": True,
+         "max_age": timedelta(hours=1)
+     }})
 
 # Registrar blueprints
 app.register_blueprint(user_bp, url_prefix='/api')
