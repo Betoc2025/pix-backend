@@ -9,12 +9,12 @@ from routes.pix import pix_bp
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 
-# Configurar CORS com headers autorizados
+# Configurar CORS para permitir Authorization corretamente
 CORS(app,
-     resources={r"/*": {"origins": "*"}},
-     supports_credentials=True,
-     expose_headers=["Content-Type", "Authorization"],
-     allow_headers=["Content-Type", "Authorization", "X-Signature"])
+     origins="*",
+     allow_headers="*",
+     expose_headers="*",
+     supports_credentials=True)
 
 # Registrar blueprints
 app.register_blueprint(user_bp, url_prefix='/api')
